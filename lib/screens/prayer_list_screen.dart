@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import '../models/prayer.dart';
 import '../models/tag.dart';
 import '../services/database_helper.dart';
+import '../utils/tag_colors.dart';
+import '../theme/theme_provider.dart';
 import 'prayer_form_screen.dart';
 import 'tag_management_screen.dart';
+import 'settings_screen.dart';
 
 class PrayerListScreen extends StatefulWidget {
   const PrayerListScreen({super.key});
 
   @override
-  _PrayerListScreenState createState() => _PrayerListScreenState();
+  State<PrayerListScreen> createState() => _PrayerListScreenState();
 }
 
 class _PrayerListScreenState extends State<PrayerListScreen> {
@@ -128,89 +132,55 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
                 },
                 autofocus: true,
               )
-            : Text('Orações'),
+            : Text('Orações Respondidas'),
         actions: [
           if (!_isSearching) ...[
             IconButton(
               icon: Icon(Icons.search),
-              tooltip: 'Pesquisar',
-              onPressed: _toggleSearch,
+              onPressed: () {
+                setState(() {
+                  _isSearching = true;
+                });
+              },
             ),
             IconButton(
-              icon: Stack(
-                children: [
-                  Icon(Icons.filter_list),
-                  if (_selectedTags.isNotEmpty)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        padding: EdgeInsets.all(1),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        constraints: BoxConstraints(
-                          minWidth: 12,
-                          minHeight: 12,
-                        ),
-                        child: Text(
-                          '${_selectedTags.length}',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              tooltip: 'Filtrar por Tags',
-              onPressed: _showFilterDialog,
-            ),
-            IconButton(
-              icon: Icon(Icons.label),
-              tooltip: 'Gerenciar Tags',
+              icon: Icon(Icons.settings),
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => TagManagementScreen(),
+                    builder: (context) => const SettingsScreen(),
                   ),
-                ).then((_) => _loadData());
+                );
               },
             ),
-            PopupMenuButton(
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: 'export',
-                  child: Text('Exportar Backup'),
-                ),
-                PopupMenuItem(
-                  value: 'import',
-                  child: Text('Importar Backup'),
-                ),
-                PopupMenuItem(
-                  value: 'about',
-                  child: Text('Sobre'),
-                ),
-              ],
-              onSelected: (value) async {
-                switch (value) {
-                  case 'export':
-                    _exportBackup();
-                    break;
-                  case 'import':
-                    _importBackup();
-                    break;
-                  case 'about':
-                    _showAboutDialog();
-                    break;
-                }
+            IconButton(
+              icon: Icon(Icons.local_offer),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const TagManagementScreen(),
+                  ),
+                );
               },
             ),
-          ],
+            IconButton(
+              icon: Icon(Icons.info),
+              onPressed: _showAboutDialog,
+            ),
+          ] else
+            IconButton(
+              icon: Icon(Icons.close),
+              onPressed: () {
+                setState(() {
+                  _isSearching = false;
+                  _searchController.clear();
+                  _searchQuery = '';
+                });
+                _loadData();
+              },
+            ),
         ],
       ),
       body: Column(
@@ -252,83 +222,140 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
                     itemBuilder: (context, index) {
                       final prayer = _prayers[index];
                       return Card(
-                        margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: ExpansionTile(
-                          title: Text(
-                            prayer.description.length > 50
-                                ? '${prayer.description.substring(0, 50)}...'
-                                : prayer.description,
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Registrada em: ${dateFormat.format(prayer.createdAt)}',
-                              ),
-                              if (prayer.tags.isNotEmpty)
-                                Wrap(
-                                  spacing: 4,
-                                  children: prayer.tags
-                                      .map((tag) => Chip(
-                                            label: Text(
-                                              tag.name,
-                                              style: TextStyle(fontSize: 12),
-                                            ),
-                                          ))
-                                      .toList(),
-                                ),
-                            ],
-                          ),
+                        color: prayer.answer != null 
+                          ? Provider.of<ThemeProvider>(context).answeredPrayerColor
+                          : Colors.white,
+                        elevation: 2,
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Column(
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Column(
+                            ListTile(
+                              contentPadding: EdgeInsets.all(16),
+                              title: Text(
+                                prayer.description,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    prayer.description,
-                                    style: TextStyle(fontSize: 16),
+                                  SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.calendar_today,
+                                        size: 16,
+                                        color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        dateFormat.format(prayer.createdAt),
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                                        ),
+                                      ),
+                                      if (prayer.answeredAt != null) ...[
+                                        SizedBox(width: 16),
+                                        Icon(
+                                          Icons.check_circle,
+                                          size: 16,
+                                          color: Colors.green,
+                                        ),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Respondida',
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: Colors.green,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                  if (prayer.answer != null) ...[
-                                    SizedBox(height: 16),
+                                  if (prayer.tags.isNotEmpty) ...[
+                                    SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: prayer.tags.map((tag) {
+                                        final tagColor = TagColors.getColorForTag(tag.name);
+                                        return Chip(
+                                          label: Text(
+                                            tag.name,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: tagColor,
+                                            ),
+                                          ),
+                                          backgroundColor: TagColors.getBackgroundColorForTag(tag.name),
+                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          padding: EdgeInsets.zero,
+                                          labelPadding: EdgeInsets.symmetric(horizontal: 8),
+                                          side: BorderSide(
+                                            color: tagColor.withOpacity(0.2),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (prayer.answer != null)
+                              Container(
+                                width: double.infinity,
+                                padding: EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                                  borderRadius: BorderRadius.only(
+                                    bottomLeft: Radius.circular(16),
+                                    bottomRight: Radius.circular(16),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
                                     Text(
                                       'Resposta:',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
+                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        color: Theme.of(context).colorScheme.primary,
                                       ),
                                     ),
                                     SizedBox(height: 8),
                                     Text(
                                       prayer.answer!,
-                                      style: TextStyle(fontSize: 16),
+                                      style: Theme.of(context).textTheme.bodyMedium,
                                     ),
+                                    SizedBox(height: 8),
                                     Text(
                                       'Respondida em: ${dateFormat.format(prayer.answeredAt!)}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
                                       ),
                                     ),
                                   ],
-                                  OverflowBar(
-                                    children: [
-                                      IconButton(
-                                        icon: Icon(Icons.edit),
-                                        onPressed: () => _editPrayer(prayer),
-                                      ),
-                                      IconButton(
-                                        icon: Icon(Icons.share),
-                                        onPressed: () => _sharePrayer(prayer),
-                                      ),
-                                      IconButton(
-                                        icon: Icon(Icons.delete),
-                                        onPressed: () => _deletePrayer(prayer),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                ),
                               ),
+                            ButtonBar(
+                              alignment: MainAxisAlignment.end,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.edit),
+                                  tooltip: 'Editar',
+                                  onPressed: () => _editPrayer(prayer),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.share),
+                                  tooltip: 'Compartilhar',
+                                  onPressed: () => _sharePrayer(prayer),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.delete),
+                                  tooltip: 'Excluir',
+                                  color: Colors.red,
+                                  onPressed: () => _deletePrayer(prayer),
+                                ),
+                              ],
                             ),
                           ],
                         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/tag.dart';
 import '../services/database_helper.dart';
+import '../utils/tag_colors.dart';
 
 class TagManagementScreen extends StatefulWidget {
   const TagManagementScreen({super.key});
@@ -169,9 +170,21 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
           final usageCount = _tagUsageCount[tag.id] ?? 0;
           return ListTile(
             leading: CircleAvatar(
-              child: Text(tag.name[0].toUpperCase()),
+              backgroundColor: TagColors.getBackgroundColorForTag(tag.name),
+              child: Text(
+                tag.name[0].toUpperCase(),
+                style: TextStyle(
+                  color: TagColors.getTextColorForTag(tag.name),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-            title: Text(tag.name),
+            title: Text(
+              tag.name,
+              style: TextStyle(
+                color: TagColors.getTextColorForTag(tag.name),
+              ),
+            ),
             subtitle: Text(
               '$usageCount ${usageCount == 1 ? 'oração' : 'orações'}',
             ),

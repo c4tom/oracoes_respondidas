@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/prayer.dart';
 import '../models/tag.dart';
 import '../services/database_helper.dart';
+import '../utils/tag_colors.dart';
 
 class PrayerFormScreen extends StatefulWidget {
   final Prayer? prayer;
@@ -90,21 +91,24 @@ class _PrayerFormScreenState extends State<PrayerFormScreen> {
                 ),
                 Wrap(
                   spacing: 8,
-                  children: [
-                    ..._selectedTags.map((tag) => Chip(
-                          label: Text(tag.name),
-                          onDeleted: () {
-                            setState(() {
-                              _selectedTags.remove(tag);
-                            });
-                          },
-                        )),
-                    ActionChip(
-                      avatar: Icon(Icons.add),
-                      label: Text('Adicionar Tag'),
-                      onPressed: _showTagDialog,
-                    ),
-                  ],
+                  children: _selectedTags.map((tag) {
+                    final tagColor = TagColors.getColorForTag(tag.name);
+                    return Chip(
+                      label: Text(
+                        tag.name,
+                        style: TextStyle(
+                          color: tagColor,
+                        ),
+                      ),
+                      backgroundColor: TagColors.getBackgroundColorForTag(tag.name),
+                      deleteIconColor: tagColor,
+                      onDeleted: () {
+                        setState(() {
+                          _selectedTags.remove(tag);
+                        });
+                      },
+                    );
+                  }).toList(),
                 ),
               ],
               if (widget.prayer != null) ...[
@@ -170,9 +174,16 @@ class _PrayerFormScreenState extends State<PrayerFormScreen> {
               ..._availableTags
                   .where((tag) => !_selectedTags.contains(tag))
                   .map((tag) => ListTile(
-                        title: Text(tag.name),
+                        title: Text(
+                          tag.name,
+                          style: TextStyle(
+                            color: TagColors.getTextColorForTag(tag.name),
+                          ),
+                        ),
+                        tileColor: TagColors.getBackgroundColorForTag(tag.name),
                         onTap: () => Navigator.pop(context, tag.name),
-                      )),
+                      ))
+                  .toList(),
               Divider(),
               ListTile(
                 leading: Icon(Icons.add),
