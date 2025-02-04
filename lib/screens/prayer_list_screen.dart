@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import '../models/prayer.dart';
+import '../models/tag.dart';
 import '../services/database_helper.dart';
 import 'prayer_form_screen.dart';
+import 'tag_management_screen.dart';
 
 class PrayerListScreen extends StatefulWidget {
   const PrayerListScreen({super.key});
@@ -13,123 +15,328 @@ class PrayerListScreen extends StatefulWidget {
 }
 
 class _PrayerListScreenState extends State<PrayerListScreen> {
+  List<Prayer> _prayers = [];
+  List<Tag> _availableTags = [];
+  List<Tag> _selectedTags = [];
+  String _searchQuery = '';
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
   final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final prayers = await DatabaseHelper.instance.searchPrayers(
+      query: _searchQuery.isEmpty ? null : _searchQuery,
+      tagIds: _selectedTags.isEmpty ? null : _selectedTags.map((t) => t.id!).toList(),
+    );
+    final tags = await DatabaseHelper.instance.getAllTags();
+    
+    setState(() {
+      _prayers = prayers;
+      _availableTags = tags;
+    });
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _isSearching = !_isSearching;
+      if (!_isSearching) {
+        _searchController.clear();
+        _searchQuery = '';
+        _loadData();
+      }
+    });
+  }
+
+  void _showFilterDialog() async {
+    final result = await showDialog<List<Tag>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Filtrar por Tags'),
+        content: Container(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                spacing: 8,
+                children: _availableTags.map((tag) {
+                  final isSelected = _selectedTags.contains(tag);
+                  return FilterChip(
+                    label: Text(tag.name),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedTags.add(tag);
+                        } else {
+                          _selectedTags.remove(tag);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _selectedTags.clear();
+              });
+              Navigator.pop(context);
+              _loadData();
+            },
+            child: Text('Limpar Filtros'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadData();
+            },
+            child: Text('Aplicar'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Orações'),
+        leading: _isSearching ? BackButton(onPressed: _toggleSearch) : null,
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Pesquisar orações...',
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                  _loadData();
+                },
+                autofocus: true,
+              )
+            : Text('Orações'),
         actions: [
-          PopupMenuButton(
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'export',
-                child: Text('Exportar Backup'),
+          if (!_isSearching) ...[
+            IconButton(
+              icon: Icon(Icons.search),
+              tooltip: 'Pesquisar',
+              onPressed: _toggleSearch,
+            ),
+            IconButton(
+              icon: Stack(
+                children: [
+                  Icon(Icons.filter_list),
+                  if (_selectedTags.isNotEmpty)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        padding: EdgeInsets.all(1),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        constraints: BoxConstraints(
+                          minWidth: 12,
+                          minHeight: 12,
+                        ),
+                        child: Text(
+                          '${_selectedTags.length}',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              PopupMenuItem(
-                value: 'import',
-                child: Text('Importar Backup'),
-              ),
-              PopupMenuItem(
-                value: 'about',
-                child: Text('Sobre'),
-              ),
-            ],
-            onSelected: (value) async {
-              switch (value) {
-                case 'export':
-                  _exportBackup();
-                  break;
-                case 'import':
-                  _importBackup();
-                  break;
-                case 'about':
-                  _showAboutDialog();
-                  break;
-              }
-            },
-          ),
+              tooltip: 'Filtrar por Tags',
+              onPressed: _showFilterDialog,
+            ),
+            IconButton(
+              icon: Icon(Icons.label),
+              tooltip: 'Gerenciar Tags',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TagManagementScreen(),
+                  ),
+                ).then((_) => _loadData());
+              },
+            ),
+            PopupMenuButton(
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'export',
+                  child: Text('Exportar Backup'),
+                ),
+                PopupMenuItem(
+                  value: 'import',
+                  child: Text('Importar Backup'),
+                ),
+                PopupMenuItem(
+                  value: 'about',
+                  child: Text('Sobre'),
+                ),
+              ],
+              onSelected: (value) async {
+                switch (value) {
+                  case 'export':
+                    _exportBackup();
+                    break;
+                  case 'import':
+                    _importBackup();
+                    break;
+                  case 'about':
+                    _showAboutDialog();
+                    break;
+                }
+              },
+            ),
+          ],
         ],
       ),
-      body: FutureBuilder<List<Prayer>>(
-        future: DatabaseHelper.instance.getAllPrayers(),
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            return ListView.builder(
-              itemCount: snapshot.data!.length,
-              itemBuilder: (context, index) {
-                final prayer = snapshot.data![index];
-                return Card(
-                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: ExpansionTile(
-                    title: Text(
-                      prayer.description.length > 50
-                          ? '${prayer.description.substring(0, 50)}...'
-                          : prayer.description,
+      body: Column(
+        children: [
+          if (_selectedTags.isNotEmpty)
+            Container(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                children: _selectedTags.map((tag) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Chip(
+                      label: Text(tag.name),
+                      onDeleted: () {
+                        setState(() {
+                          _selectedTags.remove(tag);
+                        });
+                        _loadData();
+                      },
                     ),
-                    subtitle: Text(
-                      'Registrada em: ${dateFormat.format(prayer.createdAt)}',
+                  );
+                }).toList(),
+              ),
+            ),
+          Expanded(
+            child: _prayers.isEmpty
+                ? Center(
+                    child: Text(
+                      _searchQuery.isEmpty && _selectedTags.isEmpty
+                          ? 'Nenhuma oração cadastrada'
+                          : 'Nenhuma oração encontrada',
+                      style: Theme.of(context).textTheme.bodyLarge,
                     ),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              prayer.description,
-                              style: TextStyle(fontSize: 16),
-                            ),
-                            if (prayer.answer != null) ...[
-                              SizedBox(height: 16),
+                  )
+                : ListView.builder(
+                    itemCount: _prayers.length,
+                    itemBuilder: (context, index) {
+                      final prayer = _prayers[index];
+                      return Card(
+                        margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: ExpansionTile(
+                          title: Text(
+                            prayer.description.length > 50
+                                ? '${prayer.description.substring(0, 50)}...'
+                                : prayer.description,
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                'Resposta:',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                                'Registrada em: ${dateFormat.format(prayer.createdAt)}',
+                              ),
+                              if (prayer.tags.isNotEmpty)
+                                Wrap(
+                                  spacing: 4,
+                                  children: prayer.tags
+                                      .map((tag) => Chip(
+                                            label: Text(
+                                              tag.name,
+                                              style: TextStyle(fontSize: 12),
+                                            ),
+                                          ))
+                                      .toList(),
                                 ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                prayer.answer!,
-                                style: TextStyle(fontSize: 16),
-                              ),
-                              Text(
-                                'Respondida em: ${dateFormat.format(prayer.answeredAt!)}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
                             ],
-                            OverflowBar(
-                              children: [
-                                IconButton(
-                                  icon: Icon(Icons.edit),
-                                  onPressed: () => _editPrayer(prayer),
-                                ),
-                                IconButton(
-                                  icon: Icon(Icons.share),
-                                  onPressed: () => _sharePrayer(prayer),
-                                ),
-                                IconButton(
-                                  icon: Icon(Icons.delete),
-                                  onPressed: () => _deletePrayer(prayer),
-                                ),
-                              ],
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    prayer.description,
+                                    style: TextStyle(fontSize: 16),
+                                  ),
+                                  if (prayer.answer != null) ...[
+                                    SizedBox(height: 16),
+                                    Text(
+                                      'Resposta:',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      prayer.answer!,
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                    Text(
+                                      'Respondida em: ${dateFormat.format(prayer.answeredAt!)}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                  OverflowBar(
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(Icons.edit),
+                                        onPressed: () => _editPrayer(prayer),
+                                      ),
+                                      IconButton(
+                                        icon: Icon(Icons.share),
+                                        onPressed: () => _sharePrayer(prayer),
+                                      ),
+                                      IconButton(
+                                        icon: Icon(Icons.delete),
+                                        onPressed: () => _deletePrayer(prayer),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                );
-              },
-            );
-          }
-          return Center(child: CircularProgressIndicator());
-        },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _addPrayer(),
@@ -148,6 +355,7 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
 
     if (result == true) {
       setState(() {});
+      _loadData();
     }
   }
 
@@ -161,6 +369,7 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
 
     if (result == true) {
       setState(() {});
+      _loadData();
     }
   }
 
@@ -186,6 +395,7 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
     if (confirm == true) {
       await DatabaseHelper.instance.delete(prayer.id!);
       setState(() {});
+      _loadData();
     }
   }
 
