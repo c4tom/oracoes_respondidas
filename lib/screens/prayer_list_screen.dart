@@ -436,11 +436,32 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
       builder: (context) => AboutDialog(
         applicationName: 'Orações Respondidas',
         applicationVersion: '1.0.0',
-        applicationIcon: Icon(Icons.book),
+        applicationIcon: Image.asset(
+          'assets/icon/icon.png',
+          width: 48,
+          height: 48,
+        ),
         children: [
+          SizedBox(height: 16),
           Text(
-            'Um aplicativo para registrar suas orações e suas respostas.',
-            textAlign: TextAlign.center,
+            'Um aplicativo para registrar e acompanhar suas orações e suas respostas.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Desenvolvido por:',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            'Candido H Tominaga',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          SizedBox(height: 16),
+          Text(
+            '© ${DateTime.now().year} Todos os direitos reservados',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),
