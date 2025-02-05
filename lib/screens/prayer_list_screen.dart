@@ -25,14 +25,13 @@ class PrayerListScreen extends StatefulWidget {
 }
 
 class _PrayerListScreenState extends State<PrayerListScreen> {
+  final _searchController = TextEditingController();
   List<Prayer> _prayers = [];
-  List<Tag> _availableTags = [];
+  List<Prayer> _filteredPrayers = [];
   List<Tag> _selectedTags = [];
-  String _searchQuery = '';
   bool _isSearching = false;
   bool _isLoading = false;
-  final TextEditingController _searchController = TextEditingController();
-  final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+  DateTime? _selectedDate;
 
   @override
   void initState() {
@@ -46,16 +45,13 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
     });
 
     try {
-      final prayers = await DatabaseHelper.instance.searchPrayers(
-        query: _searchQuery.isEmpty ? null : _searchQuery,
-        tagIds: _selectedTags.isEmpty ? null : _selectedTags.map((t) => t.id!).toList(),
-      );
+      final prayers = await DatabaseHelper.instance.searchPrayers();
       final tags = await DatabaseHelper.instance.getAllTags();
       
       if (mounted) {
         setState(() {
           _prayers = prayers;
-          _availableTags = tags;
+          _filteredPrayers = prayers;
           _isLoading = false;
         });
       }
@@ -65,10 +61,31 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar dados: $e')),
+          SnackBar(content: Text('Erro ao carregar orações: $e')),
         );
       }
     }
+  }
+
+  void _filterPrayers(String query) {
+    setState(() {
+      _filteredPrayers = _prayers.where((prayer) {
+        // Filtro por texto
+        bool matchesQuery = query.isEmpty ||
+            prayer.description.toLowerCase().contains(query.toLowerCase());
+        
+        // Filtro por tags
+        bool matchesTags = _selectedTags.isEmpty ||
+            prayer.tags.any((tag) => _selectedTags.contains(tag));
+        
+        // Filtro por data
+        bool matchesDate = _selectedDate == null ||
+            (prayer.createdAt.year == _selectedDate!.year &&
+             prayer.createdAt.month == _selectedDate!.month);
+        
+        return matchesQuery && matchesTags && matchesDate;
+      }).toList();
+    });
   }
 
   void _toggleSearch() {
@@ -76,13 +93,107 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
       _isSearching = !_isSearching;
       if (!_isSearching) {
         _searchController.clear();
-        _searchQuery = '';
         _loadData();
       }
     });
   }
 
-  void _showFilterDialog() async {
+  Future<void> _showDateFilterDialog() async {
+    final currentDate = DateTime.now();
+    final firstPrayerDate = _prayers.isEmpty 
+        ? currentDate 
+        : _prayers.map((p) => p.createdAt).reduce((a, b) => a.isBefore(b) ? a : b);
+    
+    final years = List.generate(
+      currentDate.year - firstPrayerDate.year + 1,
+      (index) => firstPrayerDate.year + index,
+    ).reversed.toList();
+
+    final months = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril',
+      'Maio', 'Junho', 'Julho', 'Agosto',
+      'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+
+    int? selectedYear = _selectedDate?.year;
+    int? selectedMonth = _selectedDate?.month;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Filtrar por Data'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<int>(
+                value: selectedYear,
+                decoration: InputDecoration(labelText: 'Ano'),
+                items: [
+                  DropdownMenuItem(
+                    value: null,
+                    child: Text('Todos os anos'),
+                  ),
+                  ...years.map((year) => DropdownMenuItem(
+                    value: year,
+                    child: Text(year.toString()),
+                  )),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    selectedYear = value;
+                    if (value == null) selectedMonth = null;
+                  });
+                },
+              ),
+              SizedBox(height: 16),
+              DropdownButtonFormField<int>(
+                value: selectedMonth,
+                decoration: InputDecoration(labelText: 'Mês'),
+                items: [
+                  DropdownMenuItem(
+                    value: null,
+                    child: Text('Todos os meses'),
+                  ),
+                  ...List.generate(12, (index) => DropdownMenuItem(
+                    value: index + 1,
+                    child: Text(months[index]),
+                  )),
+                ],
+                onChanged: selectedYear == null ? null : (value) {
+                  setState(() => selectedMonth = value);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  if (selectedYear != null && selectedMonth != null) {
+                    _selectedDate = DateTime(selectedYear!, selectedMonth!);
+                  } else {
+                    _selectedDate = null;
+                  }
+                  _filterPrayers(_searchController.text);
+                });
+                Navigator.of(context).pop();
+              },
+              child: Text('Aplicar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showTagFilterDialog() async {
     final result = await showDialog<List<Tag>>(
       context: context,
       builder: (context) => AlertDialog(
@@ -94,7 +205,7 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
             children: [
               Wrap(
                 spacing: 8,
-                children: _availableTags.map((tag) {
+                children: _prayers.map((prayer) => prayer.tags).expand((tags) => tags).toSet().map((tag) {
                   final isSelected = _selectedTags.contains(tag);
                   return FilterChip(
                     label: Text(tag.name),
@@ -139,113 +250,133 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Scaffold(
       appBar: AppBar(
-        leading: _isSearching ? BackButton(onPressed: _toggleSearch) : null,
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Pesquisar orações...',
-                  border: InputBorder.none,
-                ),
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                  });
-                  _loadData();
-                },
-                autofocus: true,
-              )
-            : Text('Orações Respondidas'),
+        title: Text('Orações'),
         actions: [
-          if (!_isSearching) ...[
-            IconButton(
-              icon: Icon(Icons.search),
-              onPressed: () {
-                setState(() {
-                  _isSearching = true;
-                });
-              },
-            ),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                switch (value) {
-                  case 'settings':
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SettingsScreen(),
-                      ),
-                    );
-                    break;
-                  case 'about':
-                    _showAboutDialog();
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: 'settings',
-                  child: ListTile(
-                    leading: Icon(Icons.settings),
-                    title: Text('Configurações'),
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'about',
-                  child: ListTile(
-                    leading: Icon(Icons.info),
-                    title: Text('Sobre'),
-                  ),
-                ),
-              ],
-            ),
-            IconButton(
-              icon: Icon(Icons.local_offer),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const TagManagementScreen(),
-                  ),
-                );
-              },
-            ),
-            IconButton(
-              icon: Icon(Icons.backup),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => BackupManagerScreen(),
-                  ),
-                );
-              },
-            ),
-          ] else
-            IconButton(
-              icon: Icon(Icons.close),
-              onPressed: () {
-                setState(() {
-                  _isSearching = false;
+          IconButton(
+            icon: Icon(Icons.search),
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
                   _searchController.clear();
-                  _searchQuery = '';
-                });
-                _loadData();
-              },
-            ),
+                  _loadData();
+                }
+              });
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.calendar_month),
+            onPressed: _showDateFilterDialog,
+          ),
+          IconButton(
+            icon: Icon(Icons.filter_list),
+            onPressed: _showTagFilterDialog,
+          ),
+          IconButton(
+            icon: Icon(Icons.local_offer),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TagManagementScreen(),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.backup),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => BackupManagerScreen(),
+                ),
+              );
+            },
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              switch (value) {
+                case 'settings':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsScreen(),
+                    ),
+                  );
+                  break;
+                case 'about':
+                  _showAboutDialog();
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'settings',
+                child: ListTile(
+                  leading: Icon(Icons.settings),
+                  title: Text('Configurações'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'about',
+                child: ListTile(
+                  leading: Icon(Icons.info),
+                  title: Text('Sobre'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: Column(
         children: [
-          if (_selectedTags.isNotEmpty)
-            Container(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                children: _selectedTags.map((tag) {
+          if (_isSearching)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  labelText: 'Pesquisar',
+                  suffixIcon: IconButton(
+                    icon: Icon(Icons.clear),
+                    onPressed: () {
+                      _searchController.clear();
+                      _loadData();
+                    },
+                  ),
+                ),
+                onChanged: (value) {
+                  _filterPrayers(value);
+                },
+              ),
+            ),
+          Container(
+            height: _hasActiveFilters ? 40 : 0,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              children: [
+                if (_selectedDate != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Chip(
+                      label: Text(
+                        '${_getMonthName(_selectedDate!.month)}/${_selectedDate!.year}',
+                      ),
+                      onDeleted: () {
+                        setState(() {
+                          _selectedDate = null;
+                          _filterPrayers(_searchController.text);
+                        });
+                      },
+                    ),
+                  ),
+                ..._selectedTags.map((tag) {
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: Chip(
@@ -253,32 +384,33 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
                       onDeleted: () {
                         setState(() {
                           _selectedTags.remove(tag);
+                          _filterPrayers(_searchController.text);
                         });
-                        _loadData();
                       },
                     ),
                   );
                 }).toList(),
-              ),
+              ],
             ),
+          ),
           Expanded(
             child: _isLoading
                 ? Center(
                     child: CircularProgressIndicator(),
                   )
-                : _prayers.isEmpty
+                : _filteredPrayers.isEmpty
                     ? Center(
                         child: Text(
-                          _searchQuery.isEmpty && _selectedTags.isEmpty
+                          _searchController.text.isEmpty && _selectedTags.isEmpty && _selectedDate == null
                               ? 'Nenhuma oração cadastrada'
                               : 'Nenhuma oração encontrada',
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
                       )
                     : ListView.builder(
-                        itemCount: _prayers.length,
+                        itemCount: _filteredPrayers.length,
                         itemBuilder: (context, index) {
-                          final prayer = _prayers[index];
+                          final prayer = _filteredPrayers[index];
                           return Card(
                             color: prayer.answer != null 
                               ? Provider.of<ThemeProvider>(context).answeredPrayerColor
@@ -309,7 +441,7 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
                                           ),
                                           SizedBox(width: 4),
                                           Text(
-                                            dateFormat.format(prayer.createdAt),
+                                            DateFormat('dd/MM/yyyy HH:mm').format(prayer.createdAt),
                                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                               color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
                                             ),
@@ -390,7 +522,7 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
                                         ),
                                         SizedBox(height: 8),
                                         Text(
-                                          'Respondida em: ${dateFormat.format(prayer.answeredAt!)}',
+                                          'Respondida em: ${DateFormat('dd/MM/yyyy HH:mm').format(prayer.answeredAt!)}',
                                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                             color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
                                           ),
@@ -432,6 +564,18 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
         child: Icon(Icons.add),
       ),
     );
+  }
+
+  bool get _hasActiveFilters => 
+    _selectedDate != null || _selectedTags.isNotEmpty;
+
+  String _getMonthName(int month) {
+    final months = [
+      'Jan', 'Fev', 'Mar', 'Abr',
+      'Mai', 'Jun', 'Jul', 'Ago',
+      'Set', 'Out', 'Nov', 'Dez'
+    ];
+    return months[month - 1];
   }
 
   Future<void> _addPrayer() async {

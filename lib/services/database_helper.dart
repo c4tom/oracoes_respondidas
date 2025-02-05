@@ -376,48 +376,41 @@ class DatabaseHelper {
 
   Future<List<Prayer>> searchPrayers({String? query, List<int>? tagIds}) async {
     final db = await instance.database;
-    String whereClause = '';
-    List<dynamic> whereArgs = [];
+    
+    var prayersQuery = '''
+      SELECT DISTINCT p.*
+      FROM prayers p
+      LEFT JOIN prayer_tags pt ON p.id = pt.prayer_id
+      LEFT JOIN tags t ON pt.tag_id = t.id
+    ''';
+
+    List<dynamic> arguments = [];
+    List<String> conditions = [];
 
     if (query != null && query.isNotEmpty) {
-      whereClause = 'p.description LIKE ? OR p.answer LIKE ?';
-      whereArgs.addAll(['%$query%', '%$query%']);
+      conditions.add('(p.description LIKE ? OR p.answer LIKE ?)');
+      arguments.add('%$query%');
+      arguments.add('%$query%');
     }
 
     if (tagIds != null && tagIds.isNotEmpty) {
-      final tagPlaceholders = List.filled(tagIds.length, '?').join(',');
-      final tagWhereClause = '''
-        p.id IN (
-          SELECT prayer_id 
-          FROM prayer_tags 
-          WHERE tag_id IN ($tagPlaceholders)
-          GROUP BY prayer_id
-          HAVING COUNT(DISTINCT tag_id) = ${tagIds.length}
-        )
-      ''';
-      
-      whereClause = whereClause.isEmpty 
-          ? tagWhereClause 
-          : '$whereClause AND $tagWhereClause';
-      whereArgs.addAll(tagIds);
+      conditions.add('pt.tag_id IN (${List.filled(tagIds.length, '?').join(',')})');
+      arguments.addAll(tagIds);
     }
 
-    final List<Map<String, dynamic>> maps = await db.rawQuery('''
-      SELECT DISTINCT p.* 
-      FROM prayers p
-      ${whereClause.isNotEmpty ? 'WHERE $whereClause' : ''}
-      ORDER BY p.createdAt DESC
-    ''', whereArgs);
+    if (conditions.isNotEmpty) {
+      prayersQuery += ' WHERE ${conditions.join(' AND ')}';
+    }
 
-    final prayers = await Future.wait(
-      maps.map((map) async {
-        final prayer = Prayer.fromMap(map);
-        if (prayer.id != null) {
-          prayer.tags = await getTagsForPrayer(prayer.id!);
-        }
-        return prayer;
-      }),
-    );
+    prayersQuery += ' ORDER BY p.createdAt DESC';
+
+    final List<Map<String, dynamic>> maps = await db.rawQuery(prayersQuery, arguments);
+    
+    final prayers = await Future.wait(maps.map((map) async {
+      final prayer = Prayer.fromMap(map);
+      prayer.tags = await getTagsForPrayer(prayer.id!);
+      return prayer;
+    }));
 
     return prayers;
   }
