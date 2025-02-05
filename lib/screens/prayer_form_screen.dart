@@ -60,101 +60,137 @@ class _PrayerFormScreenState extends State<PrayerFormScreen> {
         key: _formKey,
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              if (!_isPreview)
-                TextFormField(
-                  controller: _descriptionController,
-                  decoration: InputDecoration(
-                    labelText: 'Descrição da Oração',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 5,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor, digite sua oração';
-                    }
-                    return null;
-                  },
-                )
-              else
-                Expanded(
-                  child: Markdown(
-                    data: _descriptionController.text,
-                  ),
-                ),
-              SizedBox(height: 16),
-              if (!_isPreview) ...[
-                Text(
-                  'Tags:',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                Wrap(
-                  spacing: 8,
-                  children: _selectedTags.map((tag) {
-                    final tagColor = TagColors.getColorForTag(tag.name);
-                    return Chip(
-                      label: Text(
-                        tag.name,
-                        style: TextStyle(
-                          color: tagColor,
-                        ),
-                      ),
-                      backgroundColor: TagColors.getBackgroundColorForTag(tag.name),
-                      deleteIconColor: tagColor,
-                      onDeleted: () {
-                        setState(() {
-                          _selectedTags.remove(tag);
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-              ],
-              if (widget.prayer != null) ...[
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
                 if (!_isPreview)
                   TextFormField(
-                    controller: _answerController,
+                    controller: _descriptionController,
                     decoration: InputDecoration(
-                      labelText: 'Resposta da Oração',
+                      labelText: 'Descrição da Oração',
                       border: OutlineInputBorder(),
                     ),
-                    maxLines: 3,
+                    maxLines: 5,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor, digite sua oração';
+                      }
+                      return null;
+                    },
                   )
                 else
                   Expanded(
                     child: Markdown(
-                      data: _answerController.text,
+                      data: _descriptionController.text,
                     ),
                   ),
-              ],
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16.0),
-                child: Row(
-                  children: [
-                    TextButton.icon(
-                      icon: Icon(Icons.format_bold),
-                      label: Text('Negrito'),
-                      onPressed: () => _insertMarkdown('**', '**'),
+                SizedBox(height: 16),
+                if (!_isPreview) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Tags:',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      TextButton.icon(
+                        icon: Icon(Icons.add),
+                        label: Text('Adicionar Tag'),
+                        onPressed: _showTagDialog,
+                      ),
+                    ],
+                  ),
+                  if (_selectedTags.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(
+                        'Nenhuma tag selecionada. Clique em "Adicionar Tag" para começar.',
+                        style: TextStyle(
+                          color: Theme.of(context).hintColor,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).dividerColor,
+                          width: 1,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _selectedTags.map((tag) {
+                          final tagColor = TagColors.getColorForTag(tag.name);
+                          return Chip(
+                            label: Text(
+                              tag.name,
+                              style: TextStyle(
+                                color: tagColor,
+                              ),
+                            ),
+                            backgroundColor: TagColors.getBackgroundColorForTag(tag.name),
+                            deleteIconColor: tagColor,
+                            onDeleted: () {
+                              setState(() {
+                                _selectedTags.remove(tag);
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
                     ),
-                    TextButton.icon(
-                      icon: Icon(Icons.format_italic),
-                      label: Text('Itálico'),
-                      onPressed: () => _insertMarkdown('_', '_'),
+                ],
+                if (widget.prayer != null) ...[
+                  if (!_isPreview)
+                    TextFormField(
+                      controller: _answerController,
+                      decoration: InputDecoration(
+                        labelText: 'Resposta da Oração',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 3,
+                    )
+                  else
+                    Expanded(
+                      child: Markdown(
+                        data: _answerController.text,
+                      ),
                     ),
-                    TextButton.icon(
-                      icon: Icon(Icons.format_list_bulleted),
-                      label: Text('Lista'),
-                      onPressed: () => _insertMarkdown('\n- ', ''),
-                    ),
-                  ],
+                ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: Row(
+                    children: [
+                      TextButton.icon(
+                        icon: Icon(Icons.format_bold),
+                        label: Text('Negrito'),
+                        onPressed: () => _insertMarkdown('**', '**'),
+                      ),
+                      TextButton.icon(
+                        icon: Icon(Icons.format_italic),
+                        label: Text('Itálico'),
+                        onPressed: () => _insertMarkdown('_', '_'),
+                      ),
+                      TextButton.icon(
+                        icon: Icon(Icons.format_list_bulleted),
+                        label: Text('Lista'),
+                        onPressed: () => _insertMarkdown('\n- ', ''),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              ElevatedButton(
-                onPressed: _savePrayer,
-                child: Text('Salvar'),
-              ),
-            ],
+                ElevatedButton(
+                  onPressed: _savePrayer,
+                  child: Text('Salvar'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -162,85 +198,115 @@ class _PrayerFormScreenState extends State<PrayerFormScreen> {
   }
 
   Future<void> _showTagDialog() async {
-    final result = await showDialog<String>(
+    final result = await showDialog<Tag>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Adicionar Tag'),
-        content: SingleChildScrollView(
+        content: Container(
+          width: double.maxFinite,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ..._availableTags
-                  .where((tag) => !_selectedTags.contains(tag))
-                  .map((tag) => ListTile(
-                        title: Text(
-                          tag.name,
-                          style: TextStyle(
-                            color: TagColors.getTextColorForTag(tag.name),
-                          ),
-                        ),
-                        tileColor: TagColors.getBackgroundColorForTag(tag.name),
-                        onTap: () => Navigator.pop(context, tag.name),
-                      ))
-                  .toList(),
+              if (_availableTags.where((tag) => !_selectedTags.contains(tag)).isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'Nenhuma tag disponível.',
+                    style: TextStyle(
+                      color: Theme.of(context).hintColor,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                )
+              else
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: _availableTags
+                          .where((tag) => !_selectedTags.contains(tag))
+                          .map((tag) => ListTile(
+                                title: Text(
+                                  tag.name,
+                                  style: TextStyle(
+                                    color: TagColors.getTextColorForTag(tag.name),
+                                  ),
+                                ),
+                                tileColor: TagColors.getBackgroundColorForTag(tag.name),
+                                onTap: () => Navigator.pop(context, tag),
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                ),
               Divider(),
               ListTile(
                 leading: Icon(Icons.add),
                 title: Text('Nova Tag'),
-                onTap: () => Navigator.pop(context, 'NOVA_TAG'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _showNewTagDialog();
+                },
               ),
             ],
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar'),
+          ),
+        ],
       ),
     );
 
-    if (result == 'NOVA_TAG') {
-      final TextEditingController tagController = TextEditingController();
-      final newTagName = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Nova Tag'),
-          content: TextField(
-            controller: tagController,
-            decoration: InputDecoration(
-              labelText: 'Nome da Tag',
-              border: OutlineInputBorder(),
-            ),
-            autofocus: true,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, tagController.text),
-              child: Text('Adicionar'),
-            ),
-          ],
-        ),
-      );
+    if (result != null && !_selectedTags.contains(result)) {
+      setState(() {
+        _selectedTags.add(result);
+      });
+    }
+  }
 
-      if (newTagName != null && newTagName.isNotEmpty) {
-        try {
-          final newTag = await DatabaseHelper.instance.createTag(newTagName);
-          setState(() {
-            _availableTags.add(newTag);
-            _selectedTags.add(newTag);
-          });
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erro ao criar tag: $e')),
-          );
-        }
-      }
-    } else if (result != null) {
-      final selectedTag = _availableTags.firstWhere((tag) => tag.name == result);
-      if (!_selectedTags.contains(selectedTag)) {
+  Future<void> _showNewTagDialog() async {
+    final TextEditingController tagController = TextEditingController();
+    final newTagName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Nova Tag'),
+        content: TextField(
+          controller: tagController,
+          decoration: InputDecoration(
+            labelText: 'Nome da Tag',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (tagController.text.isNotEmpty) {
+                Navigator.pop(context, tagController.text);
+              }
+            },
+            child: Text('Adicionar'),
+          ),
+        ],
+      ),
+    );
+
+    if (newTagName != null && newTagName.isNotEmpty) {
+      final newTag = Tag(name: newTagName);
+      final insertedTag = await DatabaseHelper.instance.insertTag(newTag);
+      if (insertedTag != null) {
         setState(() {
-          _selectedTags.add(selectedTag);
+          _availableTags.add(insertedTag);
+          _selectedTags.add(insertedTag);
         });
       }
     }
@@ -262,36 +328,22 @@ class _PrayerFormScreenState extends State<PrayerFormScreen> {
       final prayer = Prayer(
         id: widget.prayer?.id,
         description: _descriptionController.text,
-        createdAt: widget.prayer?.createdAt ?? DateTime.now(),
         answer: _answerController.text.isEmpty ? null : _answerController.text,
+        createdAt: widget.prayer?.createdAt ?? DateTime.now(),
         answeredAt: _answerController.text.isEmpty ? null : DateTime.now(),
-        tags: _selectedTags,
       );
 
-      if (widget.prayer == null) {
-        final savedPrayer = await DatabaseHelper.instance.create(prayer);
-        for (var tag in _selectedTags) {
-          await DatabaseHelper.instance.addTagToPrayer(savedPrayer.id!, tag.id!);
-        }
-      } else {
-        await DatabaseHelper.instance.update(prayer);
-        // Atualizar tags
-        final currentTags = await DatabaseHelper.instance.getTagsForPrayer(prayer.id!);
-        // Remover tags que não estão mais selecionadas
-        for (var tag in currentTags) {
-          if (!_selectedTags.contains(tag)) {
-            await DatabaseHelper.instance.removeTagFromPrayer(prayer.id!, tag.id!);
-          }
-        }
-        // Adicionar novas tags
-        for (var tag in _selectedTags) {
-          if (!currentTags.contains(tag)) {
-            await DatabaseHelper.instance.addTagToPrayer(prayer.id!, tag.id!);
-          }
+      final savedPrayer = widget.prayer == null
+          ? await DatabaseHelper.instance.insertPrayer(prayer)
+          : await DatabaseHelper.instance.updatePrayer(prayer);
+
+      if (savedPrayer != null) {
+        // Atualiza as tags
+        await DatabaseHelper.instance.updatePrayerTags(savedPrayer.id!, _selectedTags);
+        if (mounted) {
+          Navigator.pop(context, true);
         }
       }
-
-      Navigator.pop(context, true);
     }
   }
 

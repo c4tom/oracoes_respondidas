@@ -327,4 +327,92 @@ class DatabaseHelper {
 
     return prayers;
   }
+
+  Future<Tag?> insertTag(Tag tag) async {
+    final db = await instance.database;
+    try {
+      // Verificar se a tag já existe
+      final existingTag = await db.query(
+        'tags',
+        where: 'name = ?',
+        whereArgs: [tag.name],
+      );
+
+      if (existingTag.isNotEmpty) {
+        return Tag.fromMap(existingTag.first);
+      }
+
+      // Criar nova tag
+      final id = await db.insert('tags', {'name': tag.name});
+      return Tag(id: id, name: tag.name);
+    } catch (e) {
+      print('Erro ao inserir tag: $e');
+      return null;
+    }
+  }
+
+  Future<Prayer?> insertPrayer(Prayer prayer) async {
+    final db = await instance.database;
+    try {
+      final id = await db.insert('prayers', {
+        'description': prayer.description,
+        'createdAt': prayer.createdAt.toIso8601String(),
+        'answer': prayer.answer,
+        'answeredAt': prayer.answeredAt?.toIso8601String(),
+      });
+      
+      return Prayer(
+        id: id,
+        description: prayer.description,
+        createdAt: prayer.createdAt,
+        answer: prayer.answer,
+        answeredAt: prayer.answeredAt,
+      );
+    } catch (e) {
+      print('Erro ao inserir oração: $e');
+      return null;
+    }
+  }
+
+  Future<Prayer?> updatePrayer(Prayer prayer) async {
+    final db = await instance.database;
+    try {
+      await db.update(
+        'prayers',
+        {
+          'description': prayer.description,
+          'answer': prayer.answer,
+          'answeredAt': prayer.answeredAt?.toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [prayer.id],
+      );
+      return prayer;
+    } catch (e) {
+      print('Erro ao atualizar oração: $e');
+      return null;
+    }
+  }
+
+  Future<void> updatePrayerTags(int prayerId, List<Tag> tags) async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      // Remover todas as tags atuais
+      await txn.delete(
+        'prayer_tags',
+        where: 'prayer_id = ?',
+        whereArgs: [prayerId],
+      );
+
+      // Adicionar as novas tags
+      for (var tag in tags) {
+        if (tag.id != null) {
+          await txn.insert('prayer_tags', {
+            'prayer_id': prayerId,
+            'tag_id': tag.id,
+          });
+        }
+      }
+    });
+  }
 }

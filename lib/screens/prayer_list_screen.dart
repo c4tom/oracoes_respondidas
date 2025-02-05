@@ -464,9 +464,9 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
         applicationName: 'Orações Respondidas',
         applicationVersion: '1.0.0',
         applicationIcon: Image.asset(
-          'assets/icon/icon.png',
-          width: 48,
-          height: 48,
+          'assets/images/app_icon.png',
+          width: 100,
+          height: 100,
         ),
         children: [
           SizedBox(height: 16),
