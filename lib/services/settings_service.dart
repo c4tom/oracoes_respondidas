@@ -6,7 +6,7 @@ class SettingsService {
   Future<String> getDefaultShareMessage() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_defaultShareMessageKey) ??
-        'Eu registrei essa oração, e estou orando por você. Deus te abençoe';
+        'Olá, eu registrei uma oração no meu aplicativo, e é por você que estou orando. Deus te abençoe, um grande abraço.';
   }
 
   Future<void> setDefaultShareMessage(String message) async {
