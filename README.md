@@ -1,16 +1,64 @@
-# oracoes_respondidas
+# Orações Respondidas
 
-A new Flutter project.
+## Descrição do Projeto
 
-## Getting Started
+Orações Respondidas é um aplicativo móvel desenvolvido em Flutter para ajudar usuários a registrar e acompanhar suas orações e pedidos espirituais.
 
-This project is a starting point for a Flutter application.
+## Recursos Principais
 
-A few resources to get you started if this is your first Flutter project:
+- Registro de orações e pedidos
+- Acompanhamento de respostas e progressos espirituais
+- Interface intuitiva e fácil de usar
+- Suporte a privacidade e consentimento de dados
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Tecnologias Utilizadas
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- Flutter
+- Dart
+- Plataformas suportadas: Android, iOS, Web, Windows, macOS, Linux
+
+## Configuração do Ambiente
+
+### Pré-requisitos
+
+- Flutter SDK
+- Dart SDK
+- IDE recomendada: Android Studio ou VS Code com plugins Flutter
+
+### Instalação
+
+1. Clone o repositório
+   ```
+   git clone https://github.com/seu-usuario/oracoes_respondidas.git
+   ```
+
+2. Instale as dependências
+   ```
+   flutter pub get
+   ```
+
+3. Execute o aplicativo
+   ```
+   flutter run
+   ```
+
+## Estrutura do Projeto
+
+- `lib/`: Código-fonte principal
+  - `screens/`: Telas do aplicativo
+  - `services/`: Serviços e lógica de negócio
+  - `widgets/`: Componentes reutilizáveis
+- `assets/`: Recursos estáticos (imagens, ícones)
+- `test/`: Testes unitários e de integração
+
+## Contribuição
+
+Contribuições são bem-vindas! Por favor, leia as diretrizes de contribuição antes de enviar um pull request.
+
+## Licença
+
+[Especificar a licença do projeto]
+
+## Contato
+
+[Informações de contato do desenvolvedor ou equipe]
