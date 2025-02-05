@@ -132,43 +132,88 @@ class AboutScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Seus Dados',
+              'Política de Privacidade e Proteção de Dados',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
             SizedBox(height: 8),
             Text(
-              'O Orações Respondidas armazena seus dados apenas localmente no seu dispositivo. '
-              'Nenhuma informação é compartilhada com servidores externos sem sua autorização explícita.',
+              'O Orações Respondidas está em conformidade com a LGPD (Lei Geral de Proteção de Dados) '
+              'e GDPR (General Data Protection Regulation), garantindo seus direitos fundamentais '
+              'de liberdade, privacidade e proteção de dados pessoais.',
             ),
             SizedBox(height: 16),
             Text(
-              'Permissões',
+              'Dados Coletados',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
             SizedBox(height: 8),
             Text(
-              'O aplicativo requer as seguintes permissões:\n'
-              '• Armazenamento: para backup dos seus dados\n'
+              '• Orações e descrições\n'
+              '• Tags e categorias\n'
+              '• Datas de registro\n'
+              '• Preferências do aplicativo',
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Armazenamento e Segurança',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Seus dados são armazenados localmente no seu dispositivo e protegidos. '
+              'Nenhuma informação é compartilhada com servidores externos sem seu consentimento explícito.',
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Permissões Necessárias',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              '• Armazenamento: para backup e gestão dos seus dados\n'
               '• Internet: para compartilhamento (opcional)',
             ),
             SizedBox(height: 16),
             Text(
-              'Seus Direitos',
+              'Seus Direitos (LGPD/GDPR)',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
             SizedBox(height: 8),
             Text(
-              'Você tem direito a:\n'
-              '• Acessar todos os seus dados\n'
-              '• Exportar seus dados\n'
-              '• Excluir todos os seus dados\n'
-              '• Revogar consentimento',
+              '• Acesso aos seus dados pessoais\n'
+              '• Correção de dados incompletos ou incorretos\n'
+              '• Exportação dos seus dados (portabilidade)\n'
+              '• Exclusão dos seus dados (direito ao esquecimento)\n'
+              '• Revogação do consentimento\n'
+              '• Informações sobre compartilhamento de dados',
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Contato DPO',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Para exercer seus direitos ou esclarecer dúvidas sobre a proteção dos seus dados, entre em contato:',
+            ),
+            SizedBox(height: 8),
+            Text('E-mail: privacy@oracoesrespondidas.com'),
+            SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _showFullPrivacyPolicy(context),
+              child: Text('Ver Política de Privacidade Completa'),
             ),
           ],
         ),

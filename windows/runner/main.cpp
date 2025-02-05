@@ -1,9 +1,11 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
+#include <gdiplus.h>
 
 #include "flutter_window.h"
 #include "utils.h"
+#include "splash_screen.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
@@ -16,6 +18,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+
+  // Initialize GDI+
+  ULONG_PTR gdiplusToken;
+  Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+  Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+
+  // Show splash screen
+  SplashScreen splashScreen(instance, show_command);
 
   flutter::DartProject project(L"data");
 
@@ -32,11 +42,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
   window.SetQuitOnClose(true);
 
+  // Close splash screen
+  splashScreen.Close();
+
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {
     ::TranslateMessage(&msg);
     ::DispatchMessage(&msg);
   }
+
+  // Shutdown GDI+
+  Gdiplus::GdiplusShutdown(gdiplusToken);
 
   ::CoUninitialize();
   return EXIT_SUCCESS;
