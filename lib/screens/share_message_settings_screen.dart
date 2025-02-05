@@ -2,86 +2,153 @@ import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
 
 class ShareMessageSettingsScreen extends StatefulWidget {
-  const ShareMessageSettingsScreen({Key? key}) : super(key: key);
+  const ShareMessageSettingsScreen({super.key});
 
   @override
-  _ShareMessageSettingsScreenState createState() => _ShareMessageSettingsScreenState();
+  State<ShareMessageSettingsScreen> createState() =>
+      _ShareMessageSettingsScreenState();
 }
 
-class _ShareMessageSettingsScreenState extends State<ShareMessageSettingsScreen> {
+class _ShareMessageSettingsScreenState
+    extends State<ShareMessageSettingsScreen> {
+  final _defaultMessageController = TextEditingController();
+  final _answeredMessageController = TextEditingController();
   final _settingsService = SettingsService();
-  late TextEditingController _messageController;
+  bool _hasChanges = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCurrentMessage();
+    _loadMessages();
   }
 
-  void _loadCurrentMessage() async {
-    final currentMessage = await _settingsService.getDefaultShareMessage();
+  Future<void> _loadMessages() async {
+    final defaultMessage = await _settingsService.getDefaultShareMessage();
+    final answeredMessage = await _settingsService.getAnsweredPrayerMessage();
     setState(() {
-      _messageController = TextEditingController(text: currentMessage);
+      _defaultMessageController.text = defaultMessage;
+      _answeredMessageController.text = answeredMessage;
+      _hasChanges = false;
     });
   }
 
-  void _saveMessage() async {
-    final message = _messageController.text.trim();
-    if (message.isNotEmpty) {
-      await _settingsService.setDefaultShareMessage(message);
+  Future<void> _saveChanges() async {
+    await _settingsService
+        .setDefaultShareMessage(_defaultMessageController.text);
+    await _settingsService
+        .setAnsweredPrayerMessage(_answeredMessageController.text);
+    setState(() => _hasChanges = false);
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Mensagem de compartilhamento atualizada')),
+        SnackBar(content: Text('Configurações salvas com sucesso!')),
       );
-      Navigator.of(context).pop();
     }
-  }
-
-  @override
-  void dispose() {
-    _messageController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Mensagem de Compartilhamento'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.save),
-            onPressed: _saveMessage,
+        title: Text('Mensagens de Compartilhamento'),
+      ),
+      body: ListView(
+        padding: EdgeInsets.all(16),
+        children: [
+          _buildDefaultMessageSection(),
+          SizedBox(height: 24),
+          _buildAnsweredMessageSection(),
+          SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: _hasChanges ? _saveChanges : null,
+            style: ElevatedButton.styleFrom(
+              minimumSize: Size(double.infinity, 48),
+            ),
+            child: Text('Salvar Alterações'),
           ),
+          SizedBox(height: 26),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Mensagem Padrão para Compartilhamento',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Esta mensagem será usada ao compartilhar orações sem resposta.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            SizedBox(height: 16),
-            TextField(
-              controller: _messageController,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Mensagem de Compartilhamento',
-                hintText: 'Digite sua mensagem padrão',
-              ),
-              maxLines: 3,
-              maxLength: 280,
-            ),
-          ],
-        ),
-      ),
     );
+  }
+
+  Widget _buildDefaultMessageSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Mensagem para Orações em Andamento',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Esta mensagem será usada ao compartilhar orações que ainda não foram respondidas.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        SizedBox(height: 16),
+        TextField(
+          controller: _defaultMessageController,
+          maxLines: 5,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: 'Digite a mensagem padrão...',
+          ),
+          onChanged: (_) => setState(() => _hasChanges = true),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAnsweredMessageSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Mensagem para Orações Respondidas',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Esta mensagem será usada ao compartilhar orações que foram respondidas.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        SizedBox(height: 8),
+        Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Campos Disponíveis:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
+                Text('{DATA_REGISTRO} - Data em que a oração foi registrada'),
+                Text('{DESCRICAO_ORACAO} - O texto da oração'),
+                Text('{RESPOSTA_ORACAO} - A resposta recebida'),
+                Text('{DATA_RESPOSTA} - Data em que a resposta foi registrada'),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: 16),
+        TextField(
+          controller: _answeredMessageController,
+          maxLines: 10,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: 'Digite o template da mensagem...',
+          ),
+          onChanged: (_) => setState(() => _hasChanges = true),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _defaultMessageController.dispose();
+    _answeredMessageController.dispose();
+    super.dispose();
   }
 }

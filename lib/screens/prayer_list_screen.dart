@@ -491,20 +491,29 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
   Future<void> _sharePrayer(Prayer prayer) async {
     try {
       final settingsService = SettingsService();
-      final shareMessage = await settingsService.getDefaultShareMessage();
+      final dateFormat = DateFormat('dd/MM/yyyy');
 
-      // Verificar se a oração não foi respondida
-      if (prayer.answer == null || prayer.answer!.isEmpty) {
+      if (prayer.answer != null && prayer.answer!.isNotEmpty) {
+        // Compartilhar oração respondida
+        String template = await settingsService.getAnsweredPrayerMessage();
+        
+        // Substituir os campos do template
+        final message = template
+          .replaceAll('{DATA_REGISTRO}', dateFormat.format(prayer.createdAt))
+          .replaceAll('{DESCRICAO_ORACAO}', prayer.description)
+          .replaceAll('{RESPOSTA_ORACAO}', prayer.answer!)
+          .replaceAll('{DATA_RESPOSTA}', dateFormat.format(prayer.answeredAt!));
+
+        await Share.share(
+          message,
+          subject: 'Testemunho de Oração Respondida',
+        );
+      } else {
+        // Compartilhar oração não respondida
+        final shareMessage = await settingsService.getDefaultShareMessage();
         await Share.share(
           shareMessage,
           subject: 'Pedido de Oração',
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Não é possível compartilhar orações já respondidas'),
-            backgroundColor: Colors.red,
-          ),
         );
       }
     } catch (e) {
