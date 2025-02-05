@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/prayer.dart';
 import '../models/tag.dart';
 import '../services/database_helper.dart';
 import '../utils/tag_colors.dart';
+import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import 'prayer_form_screen.dart';
 import 'tag_management_screen.dart';
@@ -169,6 +171,51 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
               icon: Icon(Icons.info),
               onPressed: _showAboutDialog,
             ),
+            IconButton(
+              icon: Icon(Icons.more_vert),
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  builder: (context) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        leading: Icon(Icons.color_lens),
+                        title: Text('Tema do Aplicativo'),
+                        subtitle: Text('Escolha o estilo visual'),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showThemeDialog(context);
+                        },
+                      ),
+                      ListTile(
+                        leading: Icon(Icons.tag),
+                        title: Text('Gerenciar Tags'),
+                        subtitle: Text('Editar ou remover tags'),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const TagManagementScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: Icon(Icons.info),
+                        title: Text('Sobre'),
+                        subtitle: Text('Informações do aplicativo'),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showAboutDialog();
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ] else
             IconButton(
               icon: Icon(Icons.close),
@@ -231,11 +278,12 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
                           children: [
                             ListTile(
                               contentPadding: EdgeInsets.all(16),
-                              title: Text(
-                                prayer.description,
-                                style: Theme.of(context).textTheme.bodyLarge,
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
+                              title: MarkdownBody(
+                                data: prayer.description,
+                                styleSheet: MarkdownStyleSheet(
+                                  p: Theme.of(context).textTheme.bodyLarge,
+                                ),
+                                selectable: true,
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -322,9 +370,12 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
                                       ),
                                     ),
                                     SizedBox(height: 8),
-                                    Text(
-                                      prayer.answer!,
-                                      style: Theme.of(context).textTheme.bodyMedium,
+                                    MarkdownBody(
+                                      data: prayer.answer!,
+                                      styleSheet: MarkdownStyleSheet(
+                                        p: Theme.of(context).textTheme.bodyMedium,
+                                      ),
+                                      selectable: true,
                                     ),
                                     SizedBox(height: 8),
                                     Text(
@@ -492,6 +543,45 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showThemeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final themeProvider = Provider.of<ThemeProvider>(context);
+        return AlertDialog(
+          title: Text('Escolha o Tema'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: AppTheme.themes.keys.map((themeName) {
+                return RadioListTile<String>(
+                  title: Text(themeName),
+                  value: themeName,
+                  groupValue: themeProvider.currentTheme,
+                  onChanged: (value) {
+                    if (value != null) {
+                      themeProvider.setTheme(value);
+                      Navigator.of(context).pop();
+                    }
+                  },
+                  secondary: CircleAvatar(
+                    backgroundColor: AppTheme.themes[themeName]!.colorScheme.primary,
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancelar'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -21,6 +21,10 @@ class _PrayerFormScreenState extends State<PrayerFormScreen> {
   bool _isPreview = false;
   List<Tag> _selectedTags = [];
   List<Tag> _availableTags = [];
+  FocusNode _descriptionFocus = FocusNode();
+  FocusNode _answerFocus = FocusNode();
+  bool _showDescriptionToolbar = false;
+  bool _showAnswerToolbar = false;
 
   @override
   void initState() {
@@ -29,7 +33,145 @@ class _PrayerFormScreenState extends State<PrayerFormScreen> {
         TextEditingController(text: widget.prayer?.description ?? '');
     _answerController =
         TextEditingController(text: widget.prayer?.answer ?? '');
+    _descriptionFocus.addListener(_onDescriptionFocusChange);
+    _answerFocus.addListener(_onAnswerFocusChange);
     _loadTags();
+  }
+
+  @override
+  void dispose() {
+    _descriptionFocus.dispose();
+    _answerFocus.dispose();
+    super.dispose();
+  }
+
+  void _onDescriptionFocusChange() {
+    setState(() {
+      _showDescriptionToolbar = _descriptionFocus.hasFocus;
+      if (_descriptionFocus.hasFocus) {
+        _showAnswerToolbar = false;
+      }
+    });
+  }
+
+  void _onAnswerFocusChange() {
+    setState(() {
+      _showAnswerToolbar = _answerFocus.hasFocus;
+      if (_answerFocus.hasFocus) {
+        _showDescriptionToolbar = false;
+      }
+    });
+  }
+
+  void _insertMarkdown(String prefix, String suffix, {TextEditingController? controller}) {
+    final TextEditingController activeController = controller ?? _descriptionController;
+    final TextSelection selection = activeController.selection;
+    final String currentText = activeController.text;
+    
+    if (selection.isValid) {
+      final String newText = currentText.replaceRange(
+        selection.start,
+        selection.end,
+        '$prefix${currentText.substring(selection.start, selection.end)}$suffix',
+      );
+      
+      activeController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection(
+          baseOffset: selection.start + prefix.length,
+          extentOffset: selection.end + prefix.length,
+        ),
+      );
+    } else {
+      final int currentPosition = activeController.selection.baseOffset;
+      final String newText = currentText.replaceRange(currentPosition, currentPosition, '$prefix$suffix');
+      
+      activeController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: currentPosition + prefix.length),
+      );
+    }
+  }
+
+  Widget _buildFormattingToolbar(TextEditingController controller) {
+    return AnimatedContainer(
+      duration: Duration(milliseconds: 200),
+      margin: EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.format_bold),
+              tooltip: 'Negrito',
+              onPressed: () => _insertMarkdown('**', '**', controller: controller),
+              constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+              padding: EdgeInsets.zero,
+            ),
+            IconButton(
+              icon: Icon(Icons.format_italic),
+              tooltip: 'Itálico',
+              onPressed: () => _insertMarkdown('_', '_', controller: controller),
+              constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+              padding: EdgeInsets.zero,
+            ),
+            IconButton(
+              icon: Icon(Icons.format_list_bulleted),
+              tooltip: 'Lista',
+              onPressed: () => _insertMarkdown('\n- ', '', controller: controller),
+              constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+              padding: EdgeInsets.zero,
+            ),
+            IconButton(
+              icon: Icon(Icons.format_list_numbered),
+              tooltip: 'Lista Numerada',
+              onPressed: () => _insertMarkdown('\n1. ', '', controller: controller),
+              constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+              padding: EdgeInsets.zero,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required String label,
+    required bool showToolbar,
+    int maxLines = 5,
+    String? Function(String?)? validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showToolbar) _buildFormattingToolbar(controller),
+        TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          decoration: InputDecoration(
+            labelText: label,
+            border: OutlineInputBorder(),
+          ),
+          maxLines: maxLines,
+          validator: validator,
+        ),
+      ],
+    );
   }
 
   Future<void> _loadTags() async {
@@ -38,163 +180,6 @@ class _PrayerFormScreenState extends State<PrayerFormScreen> {
       _selectedTags = await DatabaseHelper.instance.getTagsForPrayer(widget.prayer!.id!);
     }
     setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.prayer == null ? 'Nova Oração' : 'Editar Oração'),
-        actions: [
-          IconButton(
-            icon: Icon(_isPreview ? Icons.edit : Icons.preview),
-            onPressed: () {
-              setState(() {
-                _isPreview = !_isPreview;
-              });
-            },
-          ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (!_isPreview)
-                  TextFormField(
-                    controller: _descriptionController,
-                    decoration: InputDecoration(
-                      labelText: 'Descrição da Oração',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 5,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Por favor, digite sua oração';
-                      }
-                      return null;
-                    },
-                  )
-                else
-                  Expanded(
-                    child: Markdown(
-                      data: _descriptionController.text,
-                    ),
-                  ),
-                SizedBox(height: 16),
-                if (!_isPreview) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Tags:',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      TextButton.icon(
-                        icon: Icon(Icons.add),
-                        label: Text('Adicionar Tag'),
-                        onPressed: _showTagDialog,
-                      ),
-                    ],
-                  ),
-                  if (_selectedTags.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Text(
-                        'Nenhuma tag selecionada. Clique em "Adicionar Tag" para começar.',
-                        style: TextStyle(
-                          color: Theme.of(context).hintColor,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme.of(context).dividerColor,
-                          width: 1,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _selectedTags.map((tag) {
-                          final tagColor = TagColors.getColorForTag(tag.name);
-                          return Chip(
-                            label: Text(
-                              tag.name,
-                              style: TextStyle(
-                                color: tagColor,
-                              ),
-                            ),
-                            backgroundColor: TagColors.getBackgroundColorForTag(tag.name),
-                            deleteIconColor: tagColor,
-                            onDeleted: () {
-                              setState(() {
-                                _selectedTags.remove(tag);
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                ],
-                if (widget.prayer != null) ...[
-                  if (!_isPreview)
-                    TextFormField(
-                      controller: _answerController,
-                      decoration: InputDecoration(
-                        labelText: 'Resposta da Oração',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 3,
-                    )
-                  else
-                    Expanded(
-                      child: Markdown(
-                        data: _answerController.text,
-                      ),
-                    ),
-                ],
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
-                  child: Row(
-                    children: [
-                      TextButton.icon(
-                        icon: Icon(Icons.format_bold),
-                        label: Text('Negrito'),
-                        onPressed: () => _insertMarkdown('**', '**'),
-                      ),
-                      TextButton.icon(
-                        icon: Icon(Icons.format_italic),
-                        label: Text('Itálico'),
-                        onPressed: () => _insertMarkdown('_', '_'),
-                      ),
-                      TextButton.icon(
-                        icon: Icon(Icons.format_list_bulleted),
-                        label: Text('Lista'),
-                        onPressed: () => _insertMarkdown('\n- ', ''),
-                      ),
-                    ],
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: _savePrayer,
-                  child: Text('Salvar'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   Future<void> _showTagDialog() async {
@@ -312,17 +297,6 @@ class _PrayerFormScreenState extends State<PrayerFormScreen> {
     }
   }
 
-  void _insertMarkdown(String prefix, String suffix) {
-    final text = _descriptionController.text;
-    final selection = _descriptionController.selection;
-    final newText = text.replaceRange(
-      selection.start,
-      selection.end,
-      '$prefix${text.substring(selection.start, selection.end)}$suffix',
-    );
-    _descriptionController.text = newText;
-  }
-
   Future<void> _savePrayer() async {
     if (_formKey.currentState!.validate()) {
       final prayer = Prayer(
@@ -348,9 +322,134 @@ class _PrayerFormScreenState extends State<PrayerFormScreen> {
   }
 
   @override
-  void dispose() {
-    _descriptionController.dispose();
-    _answerController.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.prayer == null ? 'Nova Oração' : 'Editar Oração'),
+        actions: [
+          IconButton(
+            icon: Icon(_isPreview ? Icons.edit : Icons.preview),
+            onPressed: () {
+              setState(() {
+                _isPreview = !_isPreview;
+              });
+            },
+          ),
+        ],
+      ),
+      body: Form(
+        key: _formKey,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!_isPreview)
+                  _buildTextField(
+                    controller: _descriptionController,
+                    focusNode: _descriptionFocus,
+                    label: 'Descrição da Oração',
+                    showToolbar: _showDescriptionToolbar,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor, digite sua oração';
+                      }
+                      return null;
+                    },
+                  )
+                else
+                  Expanded(
+                    child: Markdown(
+                      data: _descriptionController.text,
+                    ),
+                  ),
+                SizedBox(height: 16),
+                if (!_isPreview) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Tags:',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      TextButton.icon(
+                        icon: Icon(Icons.add),
+                        label: Text('Adicionar Tag'),
+                        onPressed: _showTagDialog,
+                      ),
+                    ],
+                  ),
+                  if (_selectedTags.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(
+                        'Nenhuma tag selecionada. Clique em "Adicionar Tag" para começar.',
+                        style: TextStyle(
+                          color: Theme.of(context).hintColor,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).dividerColor,
+                          width: 1,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _selectedTags.map((tag) {
+                          final tagColor = TagColors.getColorForTag(tag.name);
+                          return Chip(
+                            label: Text(
+                              tag.name,
+                              style: TextStyle(
+                                color: tagColor,
+                              ),
+                            ),
+                            backgroundColor: TagColors.getBackgroundColorForTag(tag.name),
+                            deleteIconColor: tagColor,
+                            onDeleted: () {
+                              setState(() {
+                                _selectedTags.remove(tag);
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                ],
+                if (widget.prayer != null && !_isPreview) ...[
+                  SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _answerController,
+                    focusNode: _answerFocus,
+                    label: 'Resposta da Oração',
+                    showToolbar: _showAnswerToolbar,
+                    maxLines: 3,
+                  ),
+                ] else if (widget.prayer != null && _isPreview)
+                  Expanded(
+                    child: Markdown(
+                      data: _answerController.text,
+                    ),
+                  ),
+                SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _savePrayer,
+                  child: Text('Salvar'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
