@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:path/path.dart' show basename;
+import 'dart:io';
 import '../models/prayer.dart';
 import '../models/tag.dart';
 import '../services/database_helper.dart';
@@ -12,6 +14,7 @@ import '../theme/theme_provider.dart';
 import 'prayer_form_screen.dart';
 import 'tag_management_screen.dart';
 import 'settings_screen.dart';
+import 'backup_manager_screen.dart';
 
 class PrayerListScreen extends StatefulWidget {
   const PrayerListScreen({super.key});
@@ -26,6 +29,7 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
   List<Tag> _selectedTags = [];
   String _searchQuery = '';
   bool _isSearching = false;
+  bool _isLoading = false;
   final TextEditingController _searchController = TextEditingController();
   final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
 
@@ -36,16 +40,34 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
   }
 
   Future<void> _loadData() async {
-    final prayers = await DatabaseHelper.instance.searchPrayers(
-      query: _searchQuery.isEmpty ? null : _searchQuery,
-      tagIds: _selectedTags.isEmpty ? null : _selectedTags.map((t) => t.id!).toList(),
-    );
-    final tags = await DatabaseHelper.instance.getAllTags();
-    
     setState(() {
-      _prayers = prayers;
-      _availableTags = tags;
+      _isLoading = true;
     });
+
+    try {
+      final prayers = await DatabaseHelper.instance.searchPrayers(
+        query: _searchQuery.isEmpty ? null : _searchQuery,
+        tagIds: _selectedTags.isEmpty ? null : _selectedTags.map((t) => t.id!).toList(),
+      );
+      final tags = await DatabaseHelper.instance.getAllTags();
+      
+      if (mounted) {
+        setState(() {
+          _prayers = prayers;
+          _availableTags = tags;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar dados: $e')),
+        );
+      }
+    }
   }
 
   void _toggleSearch() {
@@ -211,6 +233,20 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
                           _showAboutDialog();
                         },
                       ),
+                      ListTile(
+                        leading: Icon(Icons.backup),
+                        title: Text('Gerenciar Backups'),
+                        subtitle: Text('Criar, restaurar e gerenciar backups'),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => BackupManagerScreen(),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 );
@@ -255,164 +291,168 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
               ),
             ),
           Expanded(
-            child: _prayers.isEmpty
+            child: _isLoading
                 ? Center(
-                    child: Text(
-                      _searchQuery.isEmpty && _selectedTags.isEmpty
-                          ? 'Nenhuma oração cadastrada'
-                          : 'Nenhuma oração encontrada',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
+                    child: CircularProgressIndicator(),
                   )
-                : ListView.builder(
-                    itemCount: _prayers.length,
-                    itemBuilder: (context, index) {
-                      final prayer = _prayers[index];
-                      return Card(
-                        color: prayer.answer != null 
-                          ? Provider.of<ThemeProvider>(context).answeredPrayerColor
-                          : Colors.white,
-                        elevation: 2,
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Column(
-                          children: [
-                            ListTile(
-                              contentPadding: EdgeInsets.all(16),
-                              title: MarkdownBody(
-                                data: prayer.description,
-                                styleSheet: MarkdownStyleSheet(
-                                  p: Theme.of(context).textTheme.bodyLarge,
-                                ),
-                                selectable: true,
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SizedBox(height: 8),
-                                  Row(
+                : _prayers.isEmpty
+                    ? Center(
+                        child: Text(
+                          _searchQuery.isEmpty && _selectedTags.isEmpty
+                              ? 'Nenhuma oração cadastrada'
+                              : 'Nenhuma oração encontrada',
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _prayers.length,
+                        itemBuilder: (context, index) {
+                          final prayer = _prayers[index];
+                          return Card(
+                            color: prayer.answer != null 
+                              ? Provider.of<ThemeProvider>(context).answeredPrayerColor
+                              : Colors.white,
+                            elevation: 2,
+                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            child: Column(
+                              children: [
+                                ListTile(
+                                  contentPadding: EdgeInsets.all(16),
+                                  title: MarkdownBody(
+                                    data: prayer.description,
+                                    styleSheet: MarkdownStyleSheet(
+                                      p: Theme.of(context).textTheme.bodyLarge,
+                                    ),
+                                    selectable: true,
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Icon(
-                                        Icons.calendar_today,
-                                        size: 16,
-                                        color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
-                                      ),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        dateFormat.format(prayer.createdAt),
-                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
-                                        ),
-                                      ),
-                                      if (prayer.answeredAt != null) ...[
-                                        SizedBox(width: 16),
-                                        Icon(
-                                          Icons.check_circle,
-                                          size: 16,
-                                          color: Colors.green,
-                                        ),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          'Respondida',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: Colors.green,
+                                      SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.calendar_today,
+                                            size: 16,
+                                            color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
                                           ),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            dateFormat.format(prayer.createdAt),
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                                            ),
+                                          ),
+                                          if (prayer.answeredAt != null) ...[
+                                            SizedBox(width: 16),
+                                            Icon(
+                                              Icons.check_circle,
+                                              size: 16,
+                                              color: Colors.green,
+                                            ),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'Respondida',
+                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                color: Colors.green,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      if (prayer.tags.isNotEmpty) ...[
+                                        SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 4,
+                                          runSpacing: 4,
+                                          children: prayer.tags.map((tag) {
+                                            final tagColor = TagColors.getColorForTag(tag.name);
+                                            return Chip(
+                                              label: Text(
+                                                tag.name,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: tagColor,
+                                                ),
+                                              ),
+                                              backgroundColor: TagColors.getBackgroundColorForTag(tag.name),
+                                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              padding: EdgeInsets.zero,
+                                              labelPadding: EdgeInsets.symmetric(horizontal: 8),
+                                              side: BorderSide(
+                                                color: tagColor.withOpacity(0.2),
+                                              ),
+                                            );
+                                          }).toList(),
                                         ),
                                       ],
                                     ],
                                   ),
-                                  if (prayer.tags.isNotEmpty) ...[
-                                    SizedBox(height: 8),
-                                    Wrap(
-                                      spacing: 4,
-                                      runSpacing: 4,
-                                      children: prayer.tags.map((tag) {
-                                        final tagColor = TagColors.getColorForTag(tag.name);
-                                        return Chip(
-                                          label: Text(
-                                            tag.name,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: tagColor,
-                                            ),
-                                          ),
-                                          backgroundColor: TagColors.getBackgroundColorForTag(tag.name),
-                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          padding: EdgeInsets.zero,
-                                          labelPadding: EdgeInsets.symmetric(horizontal: 8),
-                                          side: BorderSide(
-                                            color: tagColor.withOpacity(0.2),
-                                          ),
-                                        );
-                                      }).toList(),
+                                ),
+                                if (prayer.answer != null)
+                                  Container(
+                                    width: double.infinity,
+                                    padding: EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                                      borderRadius: BorderRadius.only(
+                                        bottomLeft: Radius.circular(16),
+                                        bottomRight: Radius.circular(16),
+                                      ),
                                     ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            if (prayer.answer != null)
-                              Container(
-                                width: double.infinity,
-                                padding: EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
-                                  borderRadius: BorderRadius.only(
-                                    bottomLeft: Radius.circular(16),
-                                    bottomRight: Radius.circular(16),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Resposta:',
+                                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                            color: Theme.of(context).colorScheme.primary,
+                                          ),
+                                        ),
+                                        SizedBox(height: 8),
+                                        MarkdownBody(
+                                          data: prayer.answer!,
+                                          styleSheet: MarkdownStyleSheet(
+                                            p: Theme.of(context).textTheme.bodyMedium,
+                                          ),
+                                          selectable: true,
+                                        ),
+                                        SizedBox(height: 8),
+                                        Text(
+                                          'Respondida em: ${dateFormat.format(prayer.answeredAt!)}',
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                ButtonBar(
+                                  alignment: MainAxisAlignment.end,
                                   children: [
-                                    Text(
-                                      'Resposta:',
-                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                        color: Theme.of(context).colorScheme.primary,
-                                      ),
+                                    IconButton(
+                                      icon: Icon(Icons.edit),
+                                      tooltip: 'Editar',
+                                      onPressed: () => _editPrayer(prayer),
                                     ),
-                                    SizedBox(height: 8),
-                                    MarkdownBody(
-                                      data: prayer.answer!,
-                                      styleSheet: MarkdownStyleSheet(
-                                        p: Theme.of(context).textTheme.bodyMedium,
-                                      ),
-                                      selectable: true,
+                                    IconButton(
+                                      icon: Icon(Icons.share),
+                                      tooltip: 'Compartilhar',
+                                      onPressed: () => _sharePrayer(prayer),
                                     ),
-                                    SizedBox(height: 8),
-                                    Text(
-                                      'Respondida em: ${dateFormat.format(prayer.answeredAt!)}',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
-                                      ),
+                                    IconButton(
+                                      icon: Icon(Icons.delete),
+                                      tooltip: 'Excluir',
+                                      color: Colors.red,
+                                      onPressed: () => _deletePrayer(prayer),
                                     ),
                                   ],
-                                ),
-                              ),
-                            ButtonBar(
-                              alignment: MainAxisAlignment.end,
-                              children: [
-                                IconButton(
-                                  icon: Icon(Icons.edit),
-                                  tooltip: 'Editar',
-                                  onPressed: () => _editPrayer(prayer),
-                                ),
-                                IconButton(
-                                  icon: Icon(Icons.share),
-                                  tooltip: 'Compartilhar',
-                                  onPressed: () => _sharePrayer(prayer),
-                                ),
-                                IconButton(
-                                  icon: Icon(Icons.delete),
-                                  tooltip: 'Excluir',
-                                  color: Colors.red,
-                                  onPressed: () => _deletePrayer(prayer),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                          );
+                        },
+                      ),
           ),
         ],
       ),
@@ -489,10 +529,58 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
 
   Future<void> _exportBackup() async {
     try {
-      final data = await DatabaseHelper.instance.exportDatabase();
-      Share.share(data);
+      // Mostrar diálogo para escolher destino
+      final action = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Exportar Backup'),
+          content: Text('Onde você deseja salvar o backup?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('local'),
+              child: Text('Pasta Local'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('share'),
+              child: Text('Compartilhar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('custom'),
+              child: Text('Escolher Pasta'),
+            ),
+          ],
+        ),
+      );
+
+      if (action == null) return;
+
+      late final File backupFile;
+      if (action == 'custom') {
+        // TODO: Implementar seleção de pasta personalizada
+        // Por enquanto, usa pasta local
+        backupFile = await DatabaseHelper.instance.exportDatabaseToFile();
+      } else {
+        backupFile = await DatabaseHelper.instance.exportDatabaseToFile();
+      }
+
+      if (action == 'share') {
+        await Share.shareFiles(
+          [backupFile.path],
+          text: 'Backup Orações Respondidas',
+        );
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Backup exportado com sucesso!')),
+        SnackBar(
+          content: Text('Backup exportado com sucesso!'),
+          action: action == 'local' ? SnackBarAction(
+            label: 'Abrir Pasta',
+            onPressed: () async {
+              final backupDir = await DatabaseHelper.instance.getBackupDirectory();
+              // TODO: Abrir pasta no explorador de arquivos
+            },
+          ) : null,
+        ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -502,10 +590,110 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
   }
 
   Future<void> _importBackup() async {
-    // TODO: Implement file picker for importing backup
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Função de importação em desenvolvimento')),
-    );
+    try {
+      // Mostrar diálogo para escolher origem
+      final action = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Importar Backup'),
+          content: Text('De onde você deseja importar o backup?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('local'),
+              child: Text('Backups Locais'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('file'),
+              child: Text('Escolher Arquivo'),
+            ),
+          ],
+        ),
+      );
+
+      if (action == null) return;
+
+      String? backupPath;
+      if (action == 'local') {
+        // Listar backups disponíveis
+        final backups = await DatabaseHelper.instance.listBackups();
+        if (backups.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Nenhum backup encontrado')),
+          );
+          return;
+        }
+
+        backupPath = await showDialog<String>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Selecione o Backup'),
+            content: Container(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: backups.length,
+                itemBuilder: (context, index) {
+                  final backup = backups[index];
+                  final filename = basename(backup.path);
+                  final date = backup.statSync().modified;
+                  return ListTile(
+                    title: Text(filename),
+                    subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(date)),
+                    onTap: () => Navigator.of(context).pop(backup.path),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      } else {
+        // TODO: Implementar seleção de arquivo
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Seleção de arquivo em desenvolvimento')),
+        );
+        return;
+      }
+
+      if (backupPath == null) return;
+
+      // Confirmar importação
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Confirmar Importação'),
+          content: Text(
+            'Esta ação irá substituir todas as orações existentes pelos dados do backup. '
+            'Tem certeza que deseja continuar?'
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Importar'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm != true) return;
+
+      // Importar backup
+      await DatabaseHelper.instance.importDatabaseFromFile(backupPath);
+      
+      // Recarregar dados
+      await _loadData();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Backup importado com sucesso!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao importar backup: $e')),
+      );
+    }
   }
 
   void _showAboutDialog() {

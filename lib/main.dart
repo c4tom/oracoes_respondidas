@@ -18,8 +18,8 @@ class MyApp extends StatelessWidget {
         builder: (context, themeProvider, _) => MaterialApp(
           title: 'Orações Respondidas',
           theme: themeProvider.theme,
-          debugShowCheckedModeBanner: false,
           home: const PrayerListScreen(),
+          debugShowCheckedModeBanner: false,
         ),
       ),
     );

@@ -2,6 +2,11 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/prayer.dart';
 import '../models/tag.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:archive/archive.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:intl/intl.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -235,19 +240,108 @@ class DatabaseHelper {
     );
   }
 
-  Future<String> exportDatabase() async {
-    final db = await instance.database;
-    final List<Map<String, dynamic>> maps = await db.query('prayers');
-    return maps.toString();
+  Future<String> getBackupFilename() async {
+    final now = DateTime.now();
+    final timestamp = DateFormat('yyyy-MM-dd_HH-mm-ss').format(now);
+    return 'backup_$timestamp.json.gz';
   }
 
-  Future<void> importDatabase(String data) async {
+  Future<String> getBackupDirectory() async {
+    final dbPath = await getDatabasesPath();
+    final backupDir = join(dbPath, 'backups');
+    final dir = Directory(backupDir);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return backupDir;
+  }
+
+  Future<List<FileSystemEntity>> listBackups() async {
+    final backupDir = await getBackupDirectory();
+    final dir = Directory(backupDir);
+    final List<FileSystemEntity> files = await dir
+        .list()
+        .where((entity) => entity.path.endsWith('.json.gz'))
+        .toList();
+    return files..sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
+  }
+
+  Future<File> exportDatabaseToFile([String? customPath]) async {
     final db = await instance.database;
-    await db.delete('prayers');
     
-    final List<dynamic> prayers = data as List;
-    for (var prayerMap in prayers) {
-      await db.insert('prayers', Map<String, dynamic>.from(prayerMap));
+    // Exportar dados
+    final Map<String, dynamic> backup = {
+      'version': 1,
+      'timestamp': DateTime.now().toIso8601String(),
+      'prayers': await db.query('prayers'),
+      'tags': await db.query('tags'),
+      'prayer_tags': await db.query('prayer_tags'),
+    };
+    
+    // Converter para JSON e comprimir
+    final jsonString = jsonEncode(backup);
+    final gzipBytes = GZipCodec().encode(utf8.encode(jsonString));
+    
+    // Salvar arquivo
+    final String filePath;
+    if (customPath != null) {
+      filePath = customPath;
+    } else {
+      final backupDir = await getBackupDirectory();
+      final filename = await getBackupFilename();
+      filePath = join(backupDir, filename);
+    }
+    
+    final file = File(filePath);
+    await file.writeAsBytes(gzipBytes);
+    return file;
+  }
+
+  Future<void> importDatabaseFromFile(String filePath) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw Exception('Arquivo de backup não encontrado');
+    }
+
+    try {
+      // Ler e descomprimir arquivo
+      final bytes = await file.readAsBytes();
+      final jsonString = utf8.decode(GZipCodec().decode(bytes));
+      final backup = jsonDecode(jsonString) as Map<String, dynamic>;
+      
+      // Verificar versão
+      final version = backup['version'] as int;
+      if (version != 1) {
+        throw Exception('Versão do backup incompatível');
+      }
+
+      final db = await instance.database;
+      await db.transaction((txn) async {
+        // Limpar dados existentes
+        await txn.delete('prayer_tags');
+        await txn.delete('prayers');
+        await txn.delete('tags');
+
+        // Importar tags
+        final List<dynamic> tags = backup['tags'];
+        for (var tag in tags) {
+          await txn.insert('tags', tag as Map<String, dynamic>);
+        }
+
+        // Importar orações
+        final List<dynamic> prayers = backup['prayers'];
+        for (var prayer in prayers) {
+          await txn.insert('prayers', prayer as Map<String, dynamic>);
+        }
+
+        // Importar relações
+        final List<dynamic> prayerTags = backup['prayer_tags'];
+        for (var prayerTag in prayerTags) {
+          await txn.insert('prayer_tags', prayerTag as Map<String, dynamic>);
+        }
+      });
+    } catch (e) {
+      throw Exception('Erro ao importar backup: ${e.toString()}');
     }
   }
 
@@ -415,4 +509,55 @@ class DatabaseHelper {
       }
     });
   }
+
+  Future<BackupStats> analyzeBackupFile(String filePath) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw Exception('Arquivo de backup não encontrado');
+    }
+
+    try {
+      // Ler e descomprimir arquivo
+      final bytes = await file.readAsBytes();
+      final jsonString = utf8.decode(GZipCodec().decode(bytes));
+      final backup = jsonDecode(jsonString) as Map<String, dynamic>;
+      
+      // Verificar versão
+      final version = backup['version'] as int;
+      if (version != 1) {
+        throw Exception('Versão do backup incompatível');
+      }
+
+      final List<dynamic> prayers = backup['prayers'];
+      final List<dynamic> tags = backup['tags'];
+      
+      // Contar orações respondidas
+      final answeredPrayers = prayers.where((prayer) => 
+        prayer['answer'] != null && prayer['answer'].toString().isNotEmpty
+      ).length;
+
+      return BackupStats(
+        totalPrayers: prayers.length,
+        answeredPrayers: answeredPrayers,
+        totalTags: tags.length,
+        timestamp: backup['timestamp'] as String,
+      );
+    } catch (e) {
+      throw Exception('Erro ao analisar backup: ${e.toString()}');
+    }
+  }
+}
+
+class BackupStats {
+  final int totalPrayers;
+  final int answeredPrayers;
+  final int totalTags;
+  final String timestamp;
+
+  BackupStats({
+    required this.totalPrayers,
+    required this.answeredPrayers,
+    required this.totalTags,
+    required this.timestamp,
+  });
 }
