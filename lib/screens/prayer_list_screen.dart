@@ -16,6 +16,7 @@ import 'prayer_form_screen.dart';
 import 'backup_manager_screen.dart';
 import 'tag_management_screen.dart';
 import 'settings_screen.dart';
+import 'about_screen.dart';
 
 class PrayerListScreen extends StatefulWidget {
   const PrayerListScreen({super.key});
@@ -671,39 +672,10 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
   }
 
   void _showAboutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AboutDialog(
-        applicationName: 'Orações Respondidas',
-        applicationVersion: '1.0.0',
-        applicationIcon: Image.asset(
-          'assets/images/app_icon.png',
-          width: 100,
-          height: 100,
-        ),
-        children: [
-          SizedBox(height: 16),
-          Text(
-            'Um aplicativo para registrar e acompanhar suas orações e suas respostas.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Desenvolvido por:',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            'Candido H Tominaga',
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-          SizedBox(height: 16),
-          Text(
-            '© ${DateTime.now().year} Todos os direitos reservados',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AboutScreen(),
       ),
     );
   }

@@ -4,6 +4,7 @@ import '../theme/theme_provider.dart';
 import '../theme/app_theme.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'share_message_settings_screen.dart';
+import 'about_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -31,6 +32,18 @@ class SettingsScreen extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (context) => const ShareMessageSettingsScreen(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.info_outline),
+            title: Text('Sobre o Aplicativo'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AboutScreen(),
                 ),
               );
             },
