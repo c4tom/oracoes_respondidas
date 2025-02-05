@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:path/path.dart' show basename;
-import 'dart:io';
+import 'package:provider/provider.dart';
 import '../models/prayer.dart';
 import '../models/tag.dart';
 import '../services/database_helper.dart';
+import '../services/settings_service.dart';
 import '../utils/tag_colors.dart';
-import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../theme/app_theme.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:path/path.dart' show basename;
+import 'dart:io';
 import 'prayer_form_screen.dart';
+import 'backup_manager_screen.dart';
 import 'tag_management_screen.dart';
 import 'settings_screen.dart';
-import 'backup_manager_screen.dart';
 
 class PrayerListScreen extends StatefulWidget {
   const PrayerListScreen({super.key});
@@ -167,16 +168,38 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
                 });
               },
             ),
-            IconButton(
-              icon: Icon(Icons.settings),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SettingsScreen(),
-                  ),
-                );
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                switch (value) {
+                  case 'settings':
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SettingsScreen(),
+                      ),
+                    );
+                    break;
+                  case 'about':
+                    _showAboutDialog();
+                    break;
+                }
               },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'settings',
+                  child: ListTile(
+                    leading: Icon(Icons.settings),
+                    title: Text('Configurações'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'about',
+                  child: ListTile(
+                    leading: Icon(Icons.info),
+                    title: Text('Sobre'),
+                  ),
+                ),
+              ],
             ),
             IconButton(
               icon: Icon(Icons.local_offer),
@@ -190,64 +213,12 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
               },
             ),
             IconButton(
-              icon: Icon(Icons.info),
-              onPressed: _showAboutDialog,
-            ),
-            IconButton(
-              icon: Icon(Icons.more_vert),
+              icon: Icon(Icons.backup),
               onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (context) => Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        leading: Icon(Icons.color_lens),
-                        title: Text('Tema do Aplicativo'),
-                        subtitle: Text('Escolha o estilo visual'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _showThemeDialog(context);
-                        },
-                      ),
-                      ListTile(
-                        leading: Icon(Icons.tag),
-                        title: Text('Gerenciar Tags'),
-                        subtitle: Text('Editar ou remover tags'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const TagManagementScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      ListTile(
-                        leading: Icon(Icons.info),
-                        title: Text('Sobre'),
-                        subtitle: Text('Informações do aplicativo'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _showAboutDialog();
-                        },
-                      ),
-                      ListTile(
-                        leading: Icon(Icons.backup),
-                        title: Text('Gerenciar Backups'),
-                        subtitle: Text('Criar, restaurar e gerenciar backups'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => BackupManagerScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => BackupManagerScreen(),
                   ),
                 );
               },
@@ -517,181 +488,31 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
     }
   }
 
-  void _sharePrayer(Prayer prayer) {
-    String shareText = 'Oração: ${prayer.description}\n';
-    shareText += 'Registrada em: ${dateFormat.format(prayer.createdAt)}\n';
-    if (prayer.answer != null) {
-      shareText += '\nResposta: ${prayer.answer}\n';
-      shareText += 'Respondida em: ${dateFormat.format(prayer.answeredAt!)}\n';
-    }
-    Share.share(shareText);
-  }
-
-  Future<void> _exportBackup() async {
+  Future<void> _sharePrayer(Prayer prayer) async {
     try {
-      // Mostrar diálogo para escolher destino
-      final action = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Exportar Backup'),
-          content: Text('Onde você deseja salvar o backup?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('local'),
-              child: Text('Pasta Local'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('share'),
-              child: Text('Compartilhar'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('custom'),
-              child: Text('Escolher Pasta'),
-            ),
-          ],
-        ),
-      );
+      final settingsService = SettingsService();
+      final shareMessage = await settingsService.getDefaultShareMessage();
 
-      if (action == null) return;
-
-      late final File backupFile;
-      if (action == 'custom') {
-        // TODO: Implementar seleção de pasta personalizada
-        // Por enquanto, usa pasta local
-        backupFile = await DatabaseHelper.instance.exportDatabaseToFile();
+      // Verificar se a oração não foi respondida
+      if (prayer.answer == null || prayer.answer!.isEmpty) {
+        await Share.share(
+          shareMessage,
+          subject: 'Pedido de Oração',
+        );
       } else {
-        backupFile = await DatabaseHelper.instance.exportDatabaseToFile();
-      }
-
-      if (action == 'share') {
-        await Share.shareFiles(
-          [backupFile.path],
-          text: 'Backup Orações Respondidas',
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Não é possível compartilhar orações já respondidas'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
-
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Backup exportado com sucesso!'),
-          action: action == 'local' ? SnackBarAction(
-            label: 'Abrir Pasta',
-            onPressed: () async {
-              final backupDir = await DatabaseHelper.instance.getBackupDirectory();
-              // TODO: Abrir pasta no explorador de arquivos
-            },
-          ) : null,
+          content: Text('Erro ao compartilhar: $e'),
+          backgroundColor: Colors.red,
         ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao exportar backup: $e')),
-      );
-    }
-  }
-
-  Future<void> _importBackup() async {
-    try {
-      // Mostrar diálogo para escolher origem
-      final action = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Importar Backup'),
-          content: Text('De onde você deseja importar o backup?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('local'),
-              child: Text('Backups Locais'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('file'),
-              child: Text('Escolher Arquivo'),
-            ),
-          ],
-        ),
-      );
-
-      if (action == null) return;
-
-      String? backupPath;
-      if (action == 'local') {
-        // Listar backups disponíveis
-        final backups = await DatabaseHelper.instance.listBackups();
-        if (backups.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Nenhum backup encontrado')),
-          );
-          return;
-        }
-
-        backupPath = await showDialog<String>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text('Selecione o Backup'),
-            content: Container(
-              width: double.maxFinite,
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: backups.length,
-                itemBuilder: (context, index) {
-                  final backup = backups[index];
-                  final filename = basename(backup.path);
-                  final date = backup.statSync().modified;
-                  return ListTile(
-                    title: Text(filename),
-                    subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(date)),
-                    onTap: () => Navigator.of(context).pop(backup.path),
-                  );
-                },
-              ),
-            ),
-          ),
-        );
-      } else {
-        // TODO: Implementar seleção de arquivo
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Seleção de arquivo em desenvolvimento')),
-        );
-        return;
-      }
-
-      if (backupPath == null) return;
-
-      // Confirmar importação
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Confirmar Importação'),
-          content: Text(
-            'Esta ação irá substituir todas as orações existentes pelos dados do backup. '
-            'Tem certeza que deseja continuar?'
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text('Importar'),
-            ),
-          ],
-        ),
-      );
-
-      if (confirm != true) return;
-
-      // Importar backup
-      await DatabaseHelper.instance.importDatabaseFromFile(backupPath);
-      
-      // Recarregar dados
-      await _loadData();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Backup importado com sucesso!')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao importar backup: $e')),
       );
     }
   }
@@ -734,42 +555,37 @@ class _PrayerListScreenState extends State<PrayerListScreen> {
     );
   }
 
-  void _showThemeDialog(BuildContext context) {
+  void _showThemeMenu(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+
     showDialog(
       context: context,
-      builder: (context) {
-        final themeProvider = Provider.of<ThemeProvider>(context);
-        return AlertDialog(
-          title: Text('Escolha o Tema'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: AppTheme.themes.keys.map((themeName) {
-                return RadioListTile<String>(
+      builder: (context) => AlertDialog(
+        title: Text('Escolha o Tema'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final themeName in AppTheme.themes.keys)
+                ListTile(
                   title: Text(themeName),
-                  value: themeName,
-                  groupValue: themeProvider.currentTheme,
-                  onChanged: (value) {
-                    if (value != null) {
-                      themeProvider.setTheme(value);
-                      Navigator.of(context).pop();
-                    }
-                  },
-                  secondary: CircleAvatar(
-                    backgroundColor: AppTheme.themes[themeName]!.colorScheme.primary,
+                  leading: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: AppTheme.themes[themeName]!.colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                );
-              }).toList(),
-            ),
+                  onTap: () {
+                    themeProvider.setTheme(themeName);
+                    Navigator.pop(context);
+                  },
+                ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancelar'),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
     );
   }
 }
