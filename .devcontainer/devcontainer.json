@@ -2,7 +2,11 @@
     "name": "Flutter",
     "image": "mcr.microsoft.com/vscode/devcontainers/base:ubuntu",
     "features": {
-        "ghcr.io/devcontainers/features/docker-in-docker:1": {}
+        "ghcr.io/devcontainers/features/docker-in-docker:1": {},
+        "ghcr.io/nordcominc/devcontainer-features/android-sdk:1": {},
+        "ghcr.io/devcontainers-extra/features/expo-cli:1": {},
+        "ghcr.io/devcontainers-community/templates/dart:1": {},
+        "ghcr.io/devcontainers/features/java:1": {}
     },
     "customizations": {
         "vscode": {
